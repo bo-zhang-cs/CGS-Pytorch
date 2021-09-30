@@ -7,19 +7,16 @@ This is an unofficial PyTorch implementation of [Composing Good Shots by Exploit
 | #Metric | SRCC↑ | Acc5↑ | Acc10↑ |
 |:--:|:--:|:--:|:--:|
 | Paper   | 0.795 | 59.7  | 77.8   |
-| This code | x   |  x    |   x    |
-| This code* | x   |  x    |   x   |
+| This code (best SRCC) |  0.790  |  57.8  | 74.6 |
+| This code (best Acc)  |  0.779  |  59.5  | 77.3 |   
 
-* means replacing the ground-truth scores with the predicted scores when computing the correlation term in the loss function.
-
-Moreover, I set the probability of mixing graph as 0.3 druing training, and scale the elements of adjacency matrix by the number of crops to produce more stable score prediction. 
+I set the probability of mixing graph as 0.3 druing training, and scale the elements of adjacency matrix by the number of crops to produce more stable score prediction. 
 
 ### FLMS
 | #Metric | IoU↑ | BDE↓ |
 |:--:|:--:|:--:|
 | Paper   | 0.836 | 0.039 |
-| This code | x   |   x    |
-| This code* | x  |   x    |
+| This code | 0.811  |  0.044  |
 
 ## Usage
 
