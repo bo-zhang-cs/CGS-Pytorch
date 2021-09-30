@@ -12,7 +12,7 @@ This is an unofficial PyTorch implementation of [Composing Good Shots by Exploit
 
 I set the probability of mixing graph as 0.3 druing training, and scale the elements of adjacency matrix by the number of crops to produce more stable score prediction. 
 
-### FLMS
+### HCDB
 | #Metric | IoU↑ | BDE↓ |
 |:--:|:--:|:--:|
 | Paper   | 0.836 | 0.039 |
