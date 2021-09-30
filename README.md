@@ -30,7 +30,7 @@ The source code of RoI&RoDAlign is from [[here]](https://github.com/lld533/Grid-
 If you use Pytorch 0.4.1, please refer to [[official implementation]](https://github.com/HuiZeng/Grid-Anchor-based-Image-Cropping-Pytorch).
 
 1. Download the code and change the **CUDA_HOME** and **-arch=sm_86** in ``roi_align/make.sh`` and ``rod_align/make.sh`` according to your enviroment, respectively.
-2. If you run this code in linux envoriment, make sure these bash files (make*.sh) are Unix text file format by runing ``:set ff=unix`` in VIM.
+2. If you run this code in linux envoriment, make sure these bash files (``make_all.sh, roi_align/make.sh, rod_align/make.sh``) are Unix text file format by runing ``:set ff=unix`` in VIM.
 3. Change the directory to the root folder, then run ``sudo bash make_all.sh`` to build and install the packages. 
 
 ### Train
