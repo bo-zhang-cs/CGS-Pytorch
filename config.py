@@ -10,7 +10,7 @@ class Config:
     backbone = 'vgg16'
 
     # training
-    gpu_id = 1
+    gpu_id = 0
     num_workers = 4
     batch_size  = 1
     keep_aspect_ratio = True

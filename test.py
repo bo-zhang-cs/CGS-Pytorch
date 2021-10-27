@@ -1,27 +1,23 @@
 import os
-import sys
 import numpy as np
-from tensorboardX import SummaryWriter
 import torch
-import time
-import datetime
-import csv
 from tqdm import tqdm
-import shutil
 import pickle
-from scipy.stats import spearmanr, pearsonr
-import torch.backends.cudnn as cudnn
-import math
-import json
+from scipy.stats import spearmanr
 import random
-
+import cv2
+import json
 from cropping_dataset import FLMSDataset, GAICDataset
 from config import cfg
 from croppingModel import RegionFeatureExtractor,CroppingGraph
 
 device = torch.device('cuda:{}'.format(cfg.gpu_id))
+torch.cuda.set_device(cfg.gpu_id)
 SEED = 0
 random.seed(SEED)
+
+save_dir = './results'
+os.makedirs(save_dir, exist_ok=True)
 
 def compute_acc(gt_scores, pr_scores):
     assert (len(gt_scores) == len(pr_scores)), '{} vs. {}'.format(len(gt_scores), len(pr_scores))
@@ -77,7 +73,7 @@ def compute_iou_and_disp(gt_crop, pre_crop, im_w, im_h):
     index   = dis_idx if (iou[iou_idx] == iou[dis_idx]) else iou_idx
     return iou[index].item(), disp[index].item()
 
-def evaluate_on_GAICD(extracor, gnn,  only_human=True):
+def evaluate_on_GAICD(extracor, gnn, save_results=False):
     extracor.eval()
     gnn.eval()
     print('='*5, 'Evaluating on GAICD dataset', '='*5)
@@ -90,13 +86,20 @@ def evaluate_on_GAICD(extracor, gnn,  only_human=True):
                         test_dataset, batch_size=1,
                         shuffle=False, num_workers=cfg.num_workers,
                         drop_last=False)
+    if save_results:
+        image_results = dict()
+        result_dir    = os.path.join(save_dir, 'GAICD')
+        os.makedirs(result_dir, exist_ok=True)
+
     with torch.no_grad():
         for batch_idx, batch_data in enumerate(tqdm(test_loader)):
             im = batch_data[0].to(device)
             rois = batch_data[1].to(device)
             scores = batch_data[2].cpu().numpy().reshape(-1)
-            width = batch_data[3]
-            height = batch_data[4]
+            width = batch_data[3].item()
+            height = batch_data[4].item()
+            image_file = batch_data[5][0]
+            image_name = os.path.basename(image_file)
             count += im.shape[0]
 
             region_feat = extracor(im, rois)
@@ -106,6 +109,23 @@ def evaluate_on_GAICD(extracor, gnn,  only_human=True):
             srcc_list.append(spearmanr(scores, pre_scores)[0])
             gt_scores.append(scores)
             pr_scores.append(pre_scores)
+
+            if save_results:
+                pre_index = np.argmax(pre_scores)
+                cand_crop = rois.squeeze().cpu().detach().numpy().reshape(-1,4)
+                cand_crop[:, 0::2] *= (float(width) / im.shape[-1])
+                cand_crop[:, 1::2] *= (float(height) / im.shape[-2])
+                cand_crop = cand_crop.astype(np.int32)
+                pred_crop = cand_crop[pre_index] # x1,y1,x2,y2
+                image_results[image_name] = pred_crop.tolist()
+                # save predicted best crop
+                src_img   = cv2.imread(image_file)
+                crop_img  = src_img[pred_crop[1] : pred_crop[3], pred_crop[0] : pred_crop[2]]
+                result_file = os.path.join(result_dir, image_name)
+                cv2.imwrite(result_file, crop_img)
+    if save_results:
+        with open(os.path.join(save_dir, 'GAICD.json'), 'w') as f:
+            json.dump(image_results, f)
 
     srcc = sum(srcc_list) / len(srcc_list)
     acc5, acc10 = compute_acc(gt_scores, pr_scores)
@@ -120,7 +140,7 @@ def get_pdefined_anchor():
     print('num of pre-defined anchors: ', pdefined_anchors.shape)
     return pdefined_anchors
 
-def evaluate_on_FLMS(extractor, gnn):
+def evaluate_on_FLMS(extractor, gnn, save_results=False):
     print('=' * 5, f'Evaluating on FLMS', '=' * 5)
     extractor.eval()
     gnn.eval()
@@ -133,8 +153,12 @@ def evaluate_on_FLMS(extractor, gnn):
     alpha_cnt = 0
     cnt = 0
 
-    with torch.no_grad():
+    if save_results:
+        image_results = dict()
+        result_dir    = os.path.join(save_dir, 'FLMS')
+        os.makedirs(result_dir, exist_ok=True)
 
+    with torch.no_grad():
         test_dataset= FLMSDataset()
         test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=1,
                                                   shuffle=False, num_workers=cfg.num_workers,
@@ -170,6 +194,16 @@ def evaluate_on_FLMS(extractor, gnn):
             accum_iou += iou
             accum_disp += disp
             cnt += 1
+
+            if save_results:
+                image_results[image_name] = [pred_x1, pred_y1, pred_x2, pred_y2]
+                src_img   = cv2.imread(image_file)
+                pred_crop = src_img[pred_y1: pred_y2, pred_x1 : pred_x2]
+                result_file = os.path.join(result_dir, image_name)
+                cv2.imwrite(result_file, pred_crop)
+    if save_results:
+        with open(os.path.join(save_dir, 'FLMS.json'), 'w') as f:
+            json.dump(image_results, f)
     avg_iou = accum_iou / cnt
     avg_disp = accum_disp / (cnt * 4.0)
     avg_recall = float(alpha_cnt) / cnt
@@ -181,15 +215,15 @@ def evaluate_on_FLMS(extractor, gnn):
 
 if __name__ == '__main__':
     extractor = RegionFeatureExtractor(loadweight=False)
-    # extractor_weight = './experiments/GAICD/checkpoints/extractor-best-srcc.pth'
-    # extractor.load_state_dict(torch.load(extractor_weight))
+    extractor_weight = './pretrained_model/extractor-best-srcc.pth'
+    extractor.load_state_dict(torch.load(extractor_weight))
     extractor = extractor.to(device).eval()
 
     gnn = CroppingGraph()
-    # gnn_weight = './experiments/GAICD/checkpoints/gnn-best-srcc.pth'
-    # gnn.load_state_dict(torch.load(gnn_weight))
+    gnn_weight = './pretrained_model/gnn-best-srcc.pth'
+    gnn.load_state_dict(torch.load(gnn_weight))
     gnn = gnn.eval().to(device)
-    evaluate_on_GAICD(extractor, gnn)
-    evaluate_on_FLMS(extractor, gnn)
+    evaluate_on_GAICD(extractor, gnn, save_results=True)
+    evaluate_on_FLMS(extractor, gnn, save_results=True)
 
 
