@@ -37,6 +37,15 @@ Download&Unzip these datasets, palce them like this:
           │    ├── image1.jpg
           │    └── image2.jpg
           └── 500_image_dataset.mat 
+          
+# Requirements
+- PyTorch>=1.0
+
+You can install packages using pip according to [``requirements.txt``](./requirements.txt): 
+
+```bash
+pip install -r requirements.txt
+```
 
 # Usage
 ```bash
